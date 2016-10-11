@@ -25,7 +25,9 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
 app.use(session({
-  secret: 'anything'
+  secret: 'anything',
+  resave: false,
+  saveUninitialized: true // set as default value 'true' for now
 }));
 
 var authenticator = function (req, res, next) {
@@ -34,28 +36,26 @@ var authenticator = function (req, res, next) {
   } else {
     res.redirect('/login');
   }
-  next();
 };
-
 
 app.get('/', authenticator, 
 function(req, res) {
   res.render('index');
 });
 
-app.get('/create', 
+app.get('/create', authenticator, 
 function(req, res) {
   res.render('index');
 });
 
-app.get('/links', 
+app.get('/links', authenticator,
 function(req, res) {
   Links.reset().fetch().then(function(links) {
     res.status(200).send(links.models);
   });
 });
 
-app.post('/links', 
+app.post('/links',
 function(req, res) {
   var uri = req.body.url;
 
@@ -94,6 +94,20 @@ function(req, res) {
 app.get('/login',
   function (req, res) {
     res.end('hit login');
+  }
+);
+
+app.post('/signup', 
+  function (req, res) {
+    new User({username: req.body.username, password: req.body.password})
+      .save()
+      .then(function(user) {
+        return res.sendStatus(201);
+      })
+      .catch(function(err) {
+        return res.sendStatus(400);
+      });
+
   }
 );
 
