@@ -93,7 +93,32 @@ function(req, res) {
 
 app.get('/login',
   function (req, res) {
-    res.end('hit login');
+    res.end(/*hit login*/);
+  }
+);
+
+app.post('/login', 
+  function (req, res) {
+    var username = req.body.username;
+    var password = req.body.password;
+
+    User.login(username, password)
+      .then(function(user) {
+        req.session.user = {id: user.get('id'), username: user.get('username')};
+        req.session.save(function(err) {
+          if (err) {
+            return err;
+          } else {
+            return res.redirect(400, '/');
+          }
+        });
+      }).catch(User.NotFoundError, function(err) {
+        console.log('User not found error:', err);
+        res.redirect(400, '/login');
+      }).catch(function (err) {
+        console.log('Error:', err);
+        res.redirect(400, '/login');
+      });
   }
 );
 
@@ -102,7 +127,14 @@ app.post('/signup',
     new User({username: req.body.username, password: req.body.password})
       .save()
       .then(function(user) {
-        return res.sendStatus(201);
+        req.session.user = {id: user.get('id'), username: user.get('username')};
+        req.session.save(function(err) {
+          if (err) {
+            return err;
+          } else {
+            return res.redirect('/');
+          }
+        });
       })
       .catch(function(err) {
         return res.sendStatus(400);
