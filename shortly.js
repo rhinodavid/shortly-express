@@ -120,17 +120,16 @@ app.post('/login',
         req.session.user = {id: user.get('id'), username: user.get('username')};
         req.session.save(function(err) {
           if (err) {
-            return err;
+            console.log('Session Save Error:', err);
+            return res.sendStatus(400);
           } else {
-            return res.redirect(400, '/');
+            return res.redirect('/');
           }
         });
-      }).catch(User.NotFoundError, function(err) {
-        console.log('User not found error:', err);
-        res.redirect(400, '/login');
-      }).catch(function (err) {
-        console.log('Error:', err);
-        res.redirect(400, '/login');
+      }).catch(function(err) {
+        req.flash('error', 'Incorrect username or password.');
+        console.log('Login Error:', err);
+        res.redirect('/login');
       });
   }
 );
@@ -163,6 +162,18 @@ app.post('/signup',
 
   }
 );
+
+app.get('/logout', function(req, res) {
+  req.session.user = null;
+  req.session.save(function(err) {
+    if (err) {
+      return res.sendStatus(400);
+    } else {
+      req.flash('info', 'You have been signed out.');
+      return res.redirect('/login');
+    }
+  });
+});
 
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
