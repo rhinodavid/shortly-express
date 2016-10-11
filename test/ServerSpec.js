@@ -19,9 +19,7 @@ var xbeforeEach = function() {};
 
 describe('', function() {
 
-  beforeEach(function() {
-    // log out currently signed in user
-    request('http://127.0.0.1:4568/logout', function(error, res, body) {});
+  beforeEach(function(done) {
 
     // delete link for roflzoo from db so it can be created later for the test
     db.knex('urls')
@@ -57,6 +55,11 @@ describe('', function() {
           message: 'Failed to create test setup data'
         };
       });
+
+    // log out currently signed in user
+    request('http://127.0.0.1:4568/logout', function(error, res, body) {
+      done();
+    });
   });
 
   describe('Link creation:', function() {
@@ -349,5 +352,40 @@ describe('', function() {
     });
 
   }); // 'Account Login'
+
+  describe('Account Logout:', function() {
+
+    var requestWithSession = request.defaults(/*{jar: true}*/);
+
+    beforeEach(function(done) {
+      new User({
+        'username': 'Phillip',
+        'password': 'Phillip'
+      }).save().then(function() {
+        done();
+      });
+    });
+
+    it('Signs out signed in users', function(done) {
+
+      var options = {
+        'method': 'POST',
+        'uri': 'http://127.0.0.1:4568/login',
+        'json': {
+          'username': 'Phillip',
+          'password': 'Phillip'
+        }
+      };
+      var j = requestWithSession.jar();
+      requestWithSession(options, function(error, res, body) {
+        request({ url: 'http://127.0.0.1:4568/logout', followAllRedirects: true, jar: j}, function (error, res, body) {
+          expect(body).to.include('You have been signed out');
+          done();
+        });
+      });
+    });
+
+  }); // 'Account Logout'
+
 
 });
