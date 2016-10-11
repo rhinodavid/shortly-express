@@ -12,6 +12,8 @@ var Link = require('./app/models/link');
 var Click = require('./app/models/click');
 var morgan = require('morgan');
 var session = require('express-session');
+var flash = require('connect-flash');
+var expressMessages = require('express-messages');
 
 var app = express();
 
@@ -23,6 +25,13 @@ app.use(partials());
 app.use(bodyParser.json());
 // Parse forms (signup/login)
 app.use(bodyParser.urlencoded({ extended: true }));
+
+app.use(flash());
+app.use(function (req, res, next) {
+  res.locals.messages = require('express-messages')(req, res);
+  next();
+});
+
 app.use(express.static(__dirname + '/public'));
 app.use(session({
   secret: 'anything',
@@ -34,7 +43,13 @@ var authenticator = function (req, res, next) {
   if (req.session.user) {
     next();
   } else {
-    res.redirect('/login');
+    if (req.get('X-Request-With') === 'XMLHttpRequest') {
+      // request came from ajax
+      res.sendStatus(403);
+    } else {
+      // request came from browser
+      res.redirect('/login');
+    }
   }
 };
 
@@ -55,7 +70,7 @@ function(req, res) {
   });
 });
 
-app.post('/links',
+app.post('/links', authenticator,
 function(req, res) {
   var uri = req.body.url;
 
@@ -139,6 +154,10 @@ app.post('/signup',
         });
       })
       .catch(function(err) {
+        if (err.errno === 19) {
+          req.flash('error', 'Username is already in use.');
+          return res.redirect('/signup');
+        }
         return res.sendStatus(400);
       });
 
