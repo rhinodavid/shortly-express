@@ -7,6 +7,7 @@ var knex = require('knex')({
   useNullAsDefault: true
 });
 var db = require('bookshelf')(knex);
+var _ = require('lodash');
 
 db.knex.schema.hasTable('urls').then(function(exists) {
   if (!exists) {
@@ -47,10 +48,18 @@ db.knex.schema.hasTable('users'). then(function(exists) {
       user.string('username', 255).unique();
       user.string('password', 255);
       user.timestamps();
+      user.string('githubId', 255);
     }).then(function (table) {
       console.log('Created Table', table);
     });
   }
 });
+
+db.Model.prototype.findOrCreate = function(options) {
+  var cloned = this.clone();
+  return this.fetch(_.extend(options, {require: true})).then(null, function() {
+    return cloned.save();
+  });
+};
 
 module.exports = db;
