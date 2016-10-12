@@ -30,7 +30,11 @@ var User = db.Model.extend({
       if (!username || !password) {
         throw new Error('Username and password are both required');
       }
-      return new this({username: username}).fetch({require: true}).tap( function (user) {
+      return new this({username: username}).fetch({require: true})
+      .catch(function(err) {
+        throw new Error('User not found');
+      })
+      .tap( function (user) {
         return bcrypt.compareAsync(password, user.get('password'))
           .then(function(result) {
             if (!result) {
