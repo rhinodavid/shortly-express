@@ -16,7 +16,8 @@ var flash = require('connect-flash');
 var expressMessages = require('express-messages');
 var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
-
+var GitHubStrategy = require('passport-github2').Strategy;
+var tokens = require('./lib/githubTokens');
 
 var app = express();
 
@@ -58,6 +59,27 @@ passport.use(new LocalStrategy(
       });
   }
 ));
+
+passport.use(new GitHubStrategy({
+  clientID: tokens.GITHUB_CLIENT_ID,
+  clientSecret: tokens.GITHUB_CLIENT_SECRET,
+  callbackURL: 'http://127.0.0.1:4568/auth/github/callback'
+},
+function(accessToken, refreshToken, profile, done) {
+  console.log(profile);
+  new User({githubId: profile.id}).findOrCreate()
+    .then(function(user) {
+      return done(null, user);
+    })
+    .catch(function(err) {
+      if (err.message === 'Invalid Password' || err.message === 'User not found') {
+        return done(null, false, { message: 'Incorrect username or password.' });
+      } else {
+        return done(err);
+      }
+    });
+}));
+
 
 passport.serializeUser(function(user, done) {
   done(null, user.id);
@@ -140,6 +162,16 @@ function(req, res) {
 /************************************************************/
 // Write your authentication routes here
 /************************************************************/
+
+app.get('/auth/github', 
+  passport.authenticate('github', { scope: [ 'user:email' ] })
+);
+
+app.get('/auth/github/callback', 
+  passport.authenticate('github', { failureRedirect: '/login' }),
+  function(req, res) {
+    res.redirect('/');
+  });
 
 app.get('/login', function (req, res) {
   res.render('login');
