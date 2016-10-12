@@ -7,3 +7,5 @@ db/*.sqlite
 .floobit
 .floo
 .flooignore
+
+lib/githubTokens.js
