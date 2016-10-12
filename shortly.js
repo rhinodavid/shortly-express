@@ -14,33 +14,68 @@ var morgan = require('morgan');
 var session = require('express-session');
 var flash = require('connect-flash');
 var expressMessages = require('express-messages');
+var passport = require('passport');
+var LocalStrategy = require('passport-local').Strategy;
+
 
 var app = express();
 
 app.use(morgan('dev'));
+app.use(express.static(__dirname + '/public'));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(session({
+  secret: 'anything',
+  resave: true,
+  saveUninitialized: true // set as default value 'true' for now
+}));
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
 app.use(partials());
-// Parse JSON (uniform resource locators)
-app.use(bodyParser.json());
-// Parse forms (signup/login)
-app.use(bodyParser.urlencoded({ extended: true }));
-
 app.use(flash());
 app.use(function (req, res, next) {
   res.locals.messages = require('express-messages')(req, res);
   next();
 });
+app.use(passport.initialize());
+app.use(passport.session());
 
-app.use(express.static(__dirname + '/public'));
-app.use(session({
-  secret: 'anything',
-  resave: false,
-  saveUninitialized: true // set as default value 'true' for now
-}));
 
-var authenticator = function (req, res, next) {
-  if (req.session.user) {
+// PASSPORT CONFIGURATION
+
+passport.use(new LocalStrategy(
+  function(username, password, done) {
+    User.login(username, password)
+      .then(function(user) {
+        return done(null, user);
+      })
+      .catch(function(err) {
+        if (err.message === 'Invalid Password' || err.message === 'User not found') {
+          return done(null, false, { message: 'Incorrect username or password.' });
+        } else {
+          return done(err);
+        }
+      });
+  }
+));
+
+passport.serializeUser(function(user, done) {
+  done(null, user.id);
+});
+
+passport.deserializeUser(function(id, done) {
+  new User({id: id})
+  .fetch()
+  .then(function(user) {
+    done(null, user);
+  })
+  .catch(function(err) {
+    done(err, null);
+  });
+});
+
+var isAuthenticated = function (req, res, next) {
+  if (req.isAuthenticated()) {
     next();
   } else {
     if (req.get('X-Request-With') === 'XMLHttpRequest') {
@@ -53,24 +88,24 @@ var authenticator = function (req, res, next) {
   }
 };
 
-app.get('/', authenticator, 
+app.get('/', isAuthenticated, 
 function(req, res) {
   res.render('index');
 });
 
-app.get('/create', authenticator, 
+app.get('/create', isAuthenticated, 
 function(req, res) {
   res.render('index');
 });
 
-app.get('/links', authenticator,
+app.get('/links', isAuthenticated,
 function(req, res) {
   Links.reset().fetch().then(function(links) {
     res.status(200).send(links.models);
   });
 });
 
-app.post('/links', authenticator,
+app.post('/links', isAuthenticated,
 function(req, res) {
   var uri = req.body.url;
 
@@ -110,29 +145,11 @@ app.get('/login', function (req, res) {
   res.render('login');
 });
 
-app.post('/login', 
-  function (req, res) {
-    var username = req.body.username;
-    var password = req.body.password;
-
-    User.login(username, password)
-      .then(function(user) {
-        req.session.user = {id: user.get('id'), username: user.get('username')};
-        req.session.save(function(err) {
-          if (err) {
-            console.log('Session Save Error:', err);
-            return res.sendStatus(400);
-          } else {
-            return res.redirect('/');
-          }
-        });
-      }).catch(function(err) {
-        req.flash('error', 'Incorrect username or password.');
-        console.log('Login Error:', err);
-        res.redirect('/login');
-      });
-  }
-);
+app.post('/login', passport.authenticate('local', {
+  successRedirect: '/',
+  failureRedirect: '/login',
+  failureFlash: true  
+}));
 
 app.get('/signup', function(req, res) {
   res.render('signup');
@@ -143,10 +160,9 @@ app.post('/signup',
     new User({username: req.body.username, password: req.body.password})
       .save()
       .then(function(user) {
-        req.session.user = {id: user.get('id'), username: user.get('username')};
-        req.session.save(function(err) {
+        req.login(user, function(err) {
           if (err) {
-            return err;
+            return res.sendStatus(400);
           } else {
             return res.redirect('/');
           }
@@ -164,16 +180,22 @@ app.post('/signup',
 );
 
 app.get('/logout', function(req, res) {
-  req.session.user = null;
-  req.session.save(function(err) {
-    if (err) {
-      return res.sendStatus(400);
-    } else {
-      req.flash('info', 'You have been signed out.');
-      return res.redirect('/login');
-    }
-  });
+  req.logout();
+  req.flash('info', 'You have been signed out.');
+  res.redirect('/login');
 });
+
+// app.get('/logout', function(req, res) {
+//   req.session.user = null;
+//   req.session.save(function(err) {
+//     if (err) {
+//       return res.sendStatus(400);
+//     } else {
+//       req.flash('info', 'You have been signed out.');
+//       return res.redirect('/login');
+//     }
+//   });
+// });
 
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
@@ -199,6 +221,7 @@ app.get('/*', function(req, res) {
     }
   });
 });
+
 
 console.log('Shortly is listening on 4568');
 app.listen(4568);
